@@ -1,174 +1,95 @@
-/*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package main
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
+    "encoding/json"
+    "fmt"
+    "github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// ABstore Chaincode implementation
-type ABstore struct {
-	contractapi.Contract
+// PatientRegistrationContract 체인코드 정의
+type PatientRegistrationContract struct {
+    contractapi.Contract
 }
 
-func (t *ABstore) Init(ctx contractapi.TransactionContextInterface, A string, Aval int, B string, Bval int, C string, Cval int) error {
-	fmt.Println("ABstore Init")
-	var err error
-	// Initialize the chaincode
-	fmt.Printf("Aval = %d, Bval = %d\n, Cval = %d\n", Aval, Bval,Cval)
-	// Write the state to the ledger
-	err = ctx.GetStub().PutState(A, []byte(strconv.Itoa(Aval)))
-	if err != nil {
-		return err
-	}
-
-	err = ctx.GetStub().PutState(B, []byte(strconv.Itoa(Bval)))
-	if err != nil {
-		return err
-	}
-
-	err = ctx.GetStub().PutState(C, []byte(strconv.Itoa(Cval)))
-	if err != nil {
-		return err
-	}
-
-
-	return nil
+// Patient 환자 구조체 정의
+type Patient struct {
+    ID       string `json:"id"`
+    Name     string `json:"name"`
+    Age      int    `json:"age"`
+    Gender   string `json:"gender"`
+    History  []string `json:"history"`
 }
 
-// Transaction makes payment of X units from A to B
-func (t *ABstore) Invoke(ctx contractapi.TransactionContextInterface, A, B, C string, X int) error {
-	var err error
-	var Aval int
-	var Bval int
-	var Cval int
-	// Get the state from the ledger
-	// TODO: will be nice to have a GetAllState call to ledger
-	Avalbytes, err := ctx.GetStub().GetState(A)
-	if err != nil {
-		return fmt.Errorf("Failed to get state")
-	}
-	if Avalbytes == nil {
-		return fmt.Errorf("Entity not found")
-	}
-	Aval, _ = strconv.Atoi(string(Avalbytes))
+// registPatient 환자 등록 함수
+// func (c *PatientRegistrationContract) registPatient(ctx contractapi.TransactionContextInterface, id string, name string, age int, gender string) error {
+//     patient := Patient{
+//         ID:     id,
+//         Name:   name,
+//         Age:    age,
+//         Gender: gender,
+//     }
+//     patientJSON, err := json.Marshal(patient)
+//     if err != nil {
+//         return err
+//     }
+//     return ctx.GetStub().PutState(id, patientJSON)
+// }
 
-	Bvalbytes, err := ctx.GetStub().GetState(B)
-	if err != nil {
-		return fmt.Errorf("Failed to get state")
-	}
-	if Bvalbytes == nil {
-		return fmt.Errorf("Entity not found")
-	}
-	Bval, _ = strconv.Atoi(string(Bvalbytes))
-
-	Cvalbytes, err := ctx.GetStub().GetState(C)
-	if err != nil {
-		return fmt.Errorf("Failed to get state")
-	}
-	if Cvalbytes == nil {
-		return fmt.Errorf("Entity not found")
-	}
-	Cval, _ = strconv.Atoi(string(Cvalbytes))
-	
-	// Perform the execution
-	Aval = Aval - X
-	Bval = Bval + X - ( X / 10 )
-	Cval = Cval + ( X / 10 )
-	fmt.Printf("Aval = %d, Bval = %d, Cval = %d\n", Aval, Bval, Cval)
-
-	// Write the state back to the ledger
-	err = ctx.GetStub().PutState(A, []byte(strconv.Itoa(Aval)))
-	if err != nil {
-		return err
-	}
-
-	err = ctx.GetStub().PutState(B, []byte(strconv.Itoa(Bval)))
-	if err != nil {
-		return err
-	}
-
-	err = ctx.GetStub().PutState(C, []byte(strconv.Itoa(Cval)))
-	if err != nil {
-		return err
-	}
-
-	return nil
+// registPatient 환자 등록 함수
+func (c *PatientRegistrationContract) RegistPatient(ctx contractapi.TransactionContextInterface, id string, name string, age int, gender string) error {
+    // 환자 정보를 문자열로 직렬화하여 저장     
+    patientInfo := fmt.Sprintf(`{"id": "%s", "name": "%s", "age": %d, "gender": "%s"}`, id, name, age, gender)
+    return ctx.GetStub().PutState(id, []byte(patientInfo))
 }
 
-// Delete  an entity from state
-func (t *ABstore) Delete(ctx contractapi.TransactionContextInterface, A string) error {
-
-	// Delete the key from the state in ledger
-	err := ctx.GetStub().DelState(A)
-	if err != nil {
-		return fmt.Errorf("Failed to delete state")
-	}
-
-	return nil
-}
-
-// Query callback representing the query of a chaincode
-func (t *ABstore) Query(ctx contractapi.TransactionContextInterface, A string) (string, error) {
-	var err error
-	// Get the state from the ledger
-	Avalbytes, err := ctx.GetStub().GetState(A)
-	if err != nil {
-		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
-		return "", errors.New(jsonResp)
-	}
-
-	if Avalbytes == nil {
-		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
-		return "", errors.New(jsonResp)
-	}
-
-	jsonResp := "{\"Name\":\"" + A + "\",\"Amount\":\"" + string(Avalbytes) + "\"}"
-	fmt.Printf("Query Response:%s\n", jsonResp)
-	return string(Avalbytes), nil
-}
-
-func (t *ABstore) GetAllQuery(ctx contractapi.TransactionContextInterface) ([]string, error) {
-    resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
+// searchPatient 환자 조회 함수
+func (c *PatientRegistrationContract) SearchPatient(ctx contractapi.TransactionContextInterface, id string) (*Patient, error) {
+    patientJSON, err := ctx.GetStub().GetState(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read from world state: %v", err)
+    }
+    if patientJSON == nil {
+        return nil, fmt.Errorf("the patient with ID %s does not exist", id)
+    }
+    var patient Patient
+    err = json.Unmarshal(patientJSON, &patient)
     if err != nil {
         return nil, err
     }
-    defer resultsIterator.Close()
-    var wallet []string
-    for resultsIterator.HasNext() {
-        queryResponse, err := resultsIterator.Next()
-        if err != nil {
-            return nil, err
-        }
-        jsonResp := "{\"Name\":\"" + string(queryResponse.Key) + "\",\"Amount\":\"" + string(queryResponse.Value) + "\"}"
-        wallet = append(wallet, jsonResp)
+    return &patient, nil
+}
+
+// searchHistory 병원 내진 이력 조회 함수
+func (c *PatientRegistrationContract) SearchHistory(ctx contractapi.TransactionContextInterface, id string) ([]string, error) {
+    patient, err := c.SearchPatient(ctx, id)
+    if err != nil {
+        return nil, err
     }
-    return wallet, nil
+    return patient.History, nil
+}
+
+// recordHistory 병원 내진 이력 작성 함수
+func (c *PatientRegistrationContract) RecordHistory(ctx contractapi.TransactionContextInterface, id string, record string) error {
+    patient, err := c.SearchPatient(ctx, id)
+    if err != nil {
+        return err
+    }
+    patient.History = append(patient.History, record)
+    patientJSON, err := json.Marshal(patient)
+    if err != nil {
+        return err
+    }
+    return ctx.GetStub().PutState(id, patientJSON)
 }
 
 func main() {
-	cc, err := contractapi.NewChaincode(new(ABstore))
-	if err != nil {
-		panic(err.Error())
-	}
-	if err := cc.Start(); err != nil {
-		fmt.Printf("Error starting ABstore chaincode: %s", err)
-	}
+    patientRegistrationContract := new(PatientRegistrationContract)
+    chaincode, err := contractapi.NewChaincode(patientRegistrationContract)
+    if err != nil {
+        fmt.Printf("Error creating patient registration chaincode: %s", err.Error())
+        return
+    }
+    if err := chaincode.Start(); err != nil {
+        fmt.Printf("Error starting patient registration chaincode: %s", err.Error())
+    }
 }
