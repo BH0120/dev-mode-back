@@ -1,96 +1,90 @@
 const express = require('express');
-const { Gateway } = require('fabric-network');
-
 const app = express();
-const port = 3000;
+const path = require('path');
+const { Gateway, Wallets } = require('fabric-network');
+const fs = require('fs');
+
+const PORT = 3000;
+const HOST = 'localhost';
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const ccpPath = path.resolve(__dirname, '..', 'connection-org1.json');
+const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+const walletPath = path.join(process.cwd(), '..', 'wallet');
+
+async function connectToGateway() {
+   const wallet = await Wallets.newFileSystemWallet(walletPath);
+   const gateway = new Gateway();
+   await gateway.connect(ccp, { wallet, identity: 'appUser', discovery: { enabled: true, asLocalhost: true } });
+   return gateway;
+}
 
 // 환자 등록 요청 처리
 app.post('/RegistPatient', async (req, res) => {
     try {
-        const { id, name, age, gender } = req.body;
-
-        // Gateway 설정
-        const gateway = new Gateway();
-        await gateway.connect(ccpPath, { wallet, identity: 'user1', discovery: { enabled: true, asLocalhost: true } });
-
-        // 네트워크로부터 채널 가져오기
-        const network = await gateway.getNetwork('mychannel');
-
-        // 체인코드 가져오기
-        const contract = network.getContract('mychaincode');
-
-        // 환자 등록 호출
-        await contract.submitTransaction('RegistPatient', id, name, age, gender);
-
-        res.status(200).send('환자가 성공적으로 등록되었습니다.');
-    } catch (error) {
-        console.error(`Error registering patient: ${error}`);
-        res.status(500).send('환자 등록 중 오류가 발생했습니다.');
-    }
+      const {  id, name, age, gender } = req.body;
+      const gateway = await connectToGateway();
+      const network = await gateway.getNetwork('channel1');
+      const contract = network.getContract('abstore');
+      await contract.submitTransaction('RegistPatient', id, name, age, gender);
+      res.json({ success: true, message: '환자가 성공적으로 등록되었습니다.' });
+  } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // 환자 조회 요청 처리
-app.get('/RearchPatient/:id', async (req, res) => {
+app.get('/SearchPatient/:id', async (req, res) => {
    try {
-       const id = req.params.id;
+      const id = req.params.id;
+      const gateway = await connectToGateway();
+      const network = await gateway.getNetwork('channel1');
+      const contract = network.getContract('abstore');
+      const patientResult = await contract.evaluateTransaction('SearchPatient', id);
 
-       // Gateway 설정
-       const gateway = new Gateway();
-       await gateway.connect(ccpPath, { wallet, identity: 'user1', discovery: { enabled: true, asLocalhost: true } });
+      // 병원 내진 이력 조회 호출
+      const historyResult = await contract.evaluateTransaction('SearchHistory', id);
+      
+      let patient = [];
+      if(typeof patientResult !== "undefined"){
+         patient = JSON.parse(patientResult.toString());
+      }else {
+         patient = "undefined";
+      }
 
-       // 네트워크로부터 채널 가져오기
-       const network = await gateway.getNetwork('mychannel');
-
-       // 체인코드 가져오기
-       const contract = network.getContract('mychaincode');
-
-       // 환자 조회 호출
-       const patientResult = await contract.evaluateTransaction('SearchPatient', id);
-
-       // 병원 내진 이력 조회 호출
-       const historyResult = await contract.evaluateTransaction('SearchHistory', id);
-
-       const patient = JSON.parse(patientResult.toString());
-       const history = JSON.parse(historyResult.toString());
-
-       // 조회 결과 합치기
+      let history = [];
+      if (typeof historyResult !== 'undefined') {
+          history = JSON.parse(historyResult.toString());
+      } else {
+         history = "undefined";
+      }
+드
        const result = {
-           patient: patient,
-           history: history
-       };
+         patient: patient,
+         history: history
+     };
+     res.status(200).send(result);
+  } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+  }
 
-       res.status(200).send(result);
-   } catch (error) {
-       console.error(`Error searching patient and hospital history: ${error}`);
-       res.status(500).send('환자 이력 조회 중 오류가 발생했습니다.');
-   }
 });
 
 // 병원 내진 이력 작성 요청 처리
 app.post('/RecordHistory', async (req, res) => {
     try {
-        const { id, record } = req.body;
-
-        // Gateway 설정
-        const gateway = new Gateway();
-        await gateway.connect(ccpPath, { wallet, identity: 'user1', discovery: { enabled: true, asLocalhost: true } });
-
-        // 네트워크로부터 채널 가져오기
-        const network = await gateway.getNetwork('mychannel');
-
-        // 체인코드 가져오기
-        const contract = network.getContract('mychaincode');
-
-        // 병원 내진 이력 작성 호출
-        await contract.submitTransaction('RecordHistory', id, record);
-
-        res.status(200).send('병원 내진 이력이 성공적으로 작성되었습니다.');
-    } catch (error) {
-        console.error(`Error recording hospital history: ${error}`);
-        res.status(500).send('병원 내진 이력 작성 중 오류가 발생했습니다.');
-    }
+      const { id, record } = req.body;
+      const gateway = await connectToGateway();
+      const network = await gateway.getNetwork('channel1');
+      const contract = network.getContract('abstore');
+      await contract.submitTransaction('RecordHistory', id, record);
+      res.json({ success: true, message: '병원 내진 이력이 성공적으로 작성되었습니다.' });
+  } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+  }
 });
 
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
+app.use(express.static(path.join(__dirname, '../client')));
+app.listen(PORT, HOST);
+console.log(`Running on http://${HOST}:${PORT}`);

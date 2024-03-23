@@ -21,21 +21,6 @@ type Patient struct {
 }
 
 // registPatient 환자 등록 함수
-// func (c *PatientRegistrationContract) registPatient(ctx contractapi.TransactionContextInterface, id string, name string, age int, gender string) error {
-//     patient := Patient{
-//         ID:     id,
-//         Name:   name,
-//         Age:    age,
-//         Gender: gender,
-//     }
-//     patientJSON, err := json.Marshal(patient)
-//     if err != nil {
-//         return err
-//     }
-//     return ctx.GetStub().PutState(id, patientJSON)
-// }
-
-// registPatient 환자 등록 함수
 func (c *PatientRegistrationContract) RegistPatient(ctx contractapi.TransactionContextInterface, id string, name string, age int, gender string) error {
     // 환자 정보를 문자열로 직렬화하여 저장     
     patientInfo := fmt.Sprintf(`{"id": "%s", "name": "%s", "age": %d, "gender": "%s"}`, id, name, age, gender)
